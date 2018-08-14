@@ -1,46 +1,92 @@
-import qualified Data.Map.Strict as M
---import Data.Text (Text)
-import Data.Char
-import System.IO
---import Data.String.ToString
+import qualified Data.Map.Strict as Map
+import           Data.Char
+import           Data.Maybe
+import           Data.List
+import           System.IO
 
 
---Todas-as-obras-Machado-de-Assis.txt
-
-readWords :: IO [String]
-readWords = do text <- readFile "teste.txt"
-               return (words (removePunc (map toLower text)))
-
-
--- Remove punctuation from text String.
-removePunc :: String -> String
-removePunc xs = [x | x <- xs, not (x `elem` ",.?!-:;\"\'")]
-
---(splitWhen  $ map toLower words)
 lowerWords :: String -> String
-lowerWords words = map toLower words
+lowerWords word = map toLower word
 
---wordsLen :: IO [String] -> Int
-wordsLen =  length readWords
---probability :: String -> Double
---probability w = fromIntegral ((count w) `div` (length nWords))
+-- | Remove punctuation from text String.
+removePunc :: String -> String
+removePunc word = [w | w <- word, not (w `elem` ",.?!-:;\"\'")]
 
---count :: String -> Int
---count w = length[w | w <- nWords, Map.member w nWords]
+wordsList :: String -> [String]
+wordsList word = words word
 
+-- | maps how many times a word appears in the file
+countWords :: [String] -> [(String,Int)]
+countWords xs = map (\w -> (head w, length w)) $ group $ sort xs
 
---known :: [String] -> [String]
---known dictionary = [ w | w <- dictionary, Map.member w nWords]
+-- | Probability of word.
+probability :: String -> [(String, Int)] -> Double
+probability word dictOfWords = (/ n) $ fromIntegral $ fromMaybe 0 (Map.lookup word (Map.fromList dictOfWords) :: Maybe Int)
+  where
+    n = fromIntegral $ Map.foldl' (+) 0 (Map.fromList dictOfWords)
 
+helper :: [String] -> [(String, Int)] -> String
+helper (x:xs) dictOfWords | xs == []  = x
+                          | otherwise = if p2 > p
+                                        then helper xs dictOfWords
+                                        else helper (x:(drop 1 xs)) dictOfWords
+                                        where p2 = probability (xs !! 0) dictOfWords
+                                              p  = probability x dictOfWords
+
+correction :: String -> [(String, Int)] -> String
+correction word dictOfWords = helper list dictOfWords
+  where list = candidates word dictOfWords
+
+candidates :: String -> [(String, Int)] -> [String]
+candidates word dictOfWords = head $ filter (not . null) s
+  where
+    s = [ known [word] dictOfWords
+        , known (edits1 word) dictOfWords
+        , known (edits2 word) dictOfWords
+        , [word]
+        ]
+
+known :: [String] -> [(String, Int)] -> [String]
+known words' dictOfWords = [ w | w <- words', Map.member w (Map.fromList dictOfWords)]
+
+-- | All edits that one two edits away from word.
 edits1 :: String -> [String]
 edits1 word = deletes ++ transposes ++ replaces ++ inserts
   where
-    alphabet    = ['a'..'z']
+    letters    = "abcdefghijklmnopqrstuvwxyz"
     splits     = [ splitAt i word                  | i <- [1 .. length word] ]
     deletes    = [ l ++ tail r                     | (l,r) <- splits, (not . null) r ]
     transposes = [ l ++ r !! 1 : head r : drop 2 r | (l,r) <- splits, length r > 1 ]
-    replaces   = [ l ++ c : tail r                 | (l,r) <- splits, (not . null) r, c <- alphabet ]
-    inserts    = [ l ++ c : r                      | (l,r) <- splits, c <- alphabet]
+    replaces   = [ l ++ c : tail r                 | (l,r) <- splits, (not . null) r, c <- letters ]
+    inserts    = [ l ++ c : r                      | (l,r) <- splits, c <- letters]
 
+-- | All edits that are two edits away from @word@.
 edits2 :: String -> [String]
 edits2 word = [ e2 | e1 <- edits1 word, e2 <- edits1 e1 ]
+
+
+{-
+
+arquivocorrigido :: [String] -> [String]
+arquivocorrigido [] = []
+arquivocorrigido (x:xs) = (correction x) : arquivocorrigido xs
+
+-}
+
+
+main :: IO ()
+main = do
+  
+  word <- readFile "/home/ufabc/Downloads/paradgmas-de-programa-ao-master/Todas-as-obras-Machado-de-Assis.txt"
+  let dictOfWords = countWords(wordsList(lowerWords(removePunc (word))))
+  
+  wordToCorrect <- getLine            --wordToCorrect :: String
+  let rightWordBe = correction wordToCorrect dictOfWords
+  {-
+  test <- readFile "/home/ufabc/Downloads/paradgmas-de-programa-ao-master/teste.txt"
+  let test' = words test
+  let textoCorrigido = arquivocorrigido test'
+  writeFile "/home/ufabc/Downloads/paradgmas-de-programa-ao-master/saida.txt" (textoCorrigido !! 0)
+  -}
+  
+  print (rightWordBe)
